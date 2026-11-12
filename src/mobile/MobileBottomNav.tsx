@@ -5,20 +5,24 @@ interface MobileBottomNavProps {
   selectedTab: MobileTab;
   onTabSelect: (tab: MobileTab) => void;
   unreadCount?: number;
+  isAuthenticated?: boolean;
 }
 
 export default function MobileBottomNav({
   selectedTab,
   onTabSelect,
   unreadCount = 2,
+  isAuthenticated = false,
 }: MobileBottomNavProps) {
-  const tabs: { id: MobileTab; label: string; icon: any }[] = [
+  const allTabs: { id: MobileTab; label: string; icon: any }[] = [
     { id: 'home', label: 'Untuk Kamu', icon: Store },
     { id: 'peluang', label: 'Peluang', icon: TrendingUp },
     { id: 'live', label: 'Live & Video', icon: PlayCircle },
     { id: 'notif', label: 'Notifikasi', icon: Bell },
-    { id: 'akun', label: 'Akun Saya', icon: User },
   ];
+
+  // Kalau belum login, hilangkan notif dari navbar
+  const tabs = isAuthenticated ? allTabs : allTabs.filter((t) => t.id !== 'notif');
 
   return (
     <nav className="bg-white border-t border-stone-200 py-1.5 px-2 flex items-center justify-around z-30 shrink-0">

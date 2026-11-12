@@ -53,12 +53,18 @@ interface MobileShellProps {
   onLogout?: () => void;
   onReplaySplash?: () => void;
   user?: { name: string; email: string; phone: string } | null;
+  isAuthenticated?: boolean;
+  onOpenLogin?: () => void;
+  onRequireAuth?: (reason?: string, onDone?: () => void) => void;
 }
 
 export default function MobileShell({
   onLogout,
   onReplaySplash,
   user,
+  isAuthenticated = false,
+  onOpenLogin,
+  onRequireAuth,
 }: MobileShellProps = {}) {
   const [selectedTab, setSelectedTab] = useState<MobileTab>('home');
   const [activeSubScreen, setActiveSubScreen] = useState<
@@ -294,8 +300,14 @@ export default function MobileShell({
 
   const totalCartCount = cartItems.reduce((acc, i) => acc + i.quantity, 0);
 
-  // Buy Now direct flow
+  // Buy Now direct flow (Login dipicu saat akan transaksi beli barang)
   const handleBuyNowDirect = (product: MobileProduct, qty: number = 1) => {
+    if (!isAuthenticated && onRequireAuth) {
+      onRequireAuth('Silakan masuk ke akun Terniva Anda untuk melanjutkan transaksi pembelian komoditas.', () => {
+        handleBuyNowDirect(product, qty);
+      });
+      return;
+    }
     const directItem: MobileCartItem = { product, quantity: qty, isSelected: true };
     setActiveOrderData({
       orderNumber: `TRN-${Math.floor(10000000 + Math.random() * 90000000)}`,
@@ -305,8 +317,8 @@ export default function MobileShell({
       totalPayment: product.price * qty + 25000,
       courier: 'JNE Agri Cargo Dingin (Est. 1-2 hari)',
       paymentMethod: 'BCA Virtual Account',
-      recipientName: 'Restoran Nusantara Rasa (Budi Santoso)',
-      recipientPhone: '081234567890',
+      recipientName: user?.name || 'Mitra Pembeli (Terverifikasi)',
+      recipientPhone: user?.phone || '081234567890',
       recipientAddress: 'Jl. Thamrin No. 45, Menteng, Jakarta Pusat (10350)',
     });
     setActiveSubScreen('checkout');
@@ -316,6 +328,30 @@ export default function MobileShell({
   const handleBuyFromVideo = (productName: string, price: number) => {
     const matched = MOBILE_PRODUCTS.find((p) => p.name.includes(productName)) || MOBILE_PRODUCTS[0];
     handleBuyNowDirect(matched, 1);
+  };
+
+  // Handler buka Toko Saya dengan guard login (Akses data banyak/privat)
+  const handleOpenSellerCenter = () => {
+    if (!isAuthenticated && onRequireAuth) {
+      onRequireAuth('Silakan masuk ke akun mitra penjual untuk mengelola etalase, menambah produk, dan restok toko Anda.', () => {
+        setActiveSubScreen('seller_center');
+      });
+      return;
+    }
+    setActiveSubScreen('seller_center');
+  };
+
+  // Handler buka Akun dengan guard login (Akses data privat/transaksi)
+  const handleOpenAccount = () => {
+    if (!isAuthenticated && onRequireAuth) {
+      onRequireAuth('Silakan masuk ke akun Terniva Anda untuk melihat profil dan riwayat pesanan.', () => {
+        setActiveSubScreen('none');
+        setSelectedTab('akun');
+      });
+      return;
+    }
+    setActiveSubScreen('none');
+    setSelectedTab('akun');
   };
 
   const renderActiveScreen = () => {
@@ -329,6 +365,12 @@ export default function MobileShell({
           onToggleSelect={handleToggleSelectCart}
           onToggleSelectAll={handleToggleSelectAllCart}
           onCheckout={(selected) => {
+            if (!isAuthenticated && onRequireAuth) {
+              onRequireAuth('Silakan masuk ke akun Terniva Anda untuk memproses pesanan dan pembayaran via Escrow.', () => {
+                setActiveSubScreen('cart');
+              });
+              return;
+            }
             const sub = selected.reduce((acc, i) => acc + i.product.price * i.quantity, 0);
             setActiveOrderData({
               orderNumber: `TRN-${Math.floor(10000000 + Math.random() * 90000000)}`,
@@ -338,8 +380,8 @@ export default function MobileShell({
               totalPayment: sub + 25000,
               courier: 'JNE Agri Cargo Dingin (Est. 1-2 hari)',
               paymentMethod: 'BCA Virtual Account',
-              recipientName: 'Restoran Nusantara Rasa (Budi Santoso)',
-              recipientPhone: '081234567890',
+              recipientName: user?.name || 'Mitra Pembeli (Terverifikasi)',
+              recipientPhone: user?.phone || '081234567890',
               recipientAddress: 'Jl. Thamrin No. 45, Menteng, Jakarta Pusat (10350)',
             });
             setActiveSubScreen('checkout');
@@ -586,15 +628,26 @@ export default function MobileShell({
                 Intro
               </button>
             )}
-            {onLogout && (
+            {!isAuthenticated ? (
               <button
-                onClick={onLogout}
-                title="Keluar / Ganti Akun"
-                className="text-rose-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                type="button"
+                onClick={onOpenLogin}
+                className="hidden md:flex bg-emerald-800 hover:bg-emerald-700 text-white font-bold px-2 py-0.5 border border-emerald-600 transition-colors cursor-pointer items-center gap-1 text-[11px]"
               >
-                <LogOut className="w-3 h-3" />
-                <span className="hidden sm:inline">Keluar</span>
+                <User className="w-3 h-3 text-emerald-300" />
+                <span>Masuk / Login</span>
               </button>
+            ) : (
+              onLogout && (
+                <button
+                  onClick={onLogout}
+                  title="Keluar / Ganti Akun"
+                  className="text-rose-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span className="hidden sm:inline">Keluar ({user?.name ? user.name.split(' ')[0] : 'Akun'})</span>
+                </button>
+              )
             )}
           </div>
         </div>
@@ -668,10 +721,10 @@ export default function MobileShell({
 
           {/* Quick Header Action Icons */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {/* Toko Saya / Pusat Penjual Button */}
+            {/* Toko Saya / Pusat Penjual Button (Disembunyikan pada Mode Mobile, Tampil di Desktop) */}
             <button
-              onClick={() => setActiveSubScreen('seller_center')}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border transition-all cursor-pointer ${
+              onClick={handleOpenSellerCenter}
+              className={`hidden md:flex items-center gap-1.5 px-3 py-2 text-xs font-bold border transition-all cursor-pointer ${
                 activeSubScreen === 'seller_center'
                   ? 'bg-emerald-800 text-white border-emerald-800 shadow-xs'
                   : 'bg-stone-50 hover:bg-emerald-50 text-stone-800 border-stone-300 hover:border-emerald-700'
@@ -679,63 +732,77 @@ export default function MobileShell({
               title="Buka Pusat Penjual (Toko Saya)"
             >
               <Store className="w-4 h-4 text-emerald-700" />
-              <span className="hidden md:inline">Toko Saya</span>
+              <span>Toko Saya</span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 bg-emerald-700 text-white rounded-full">
                 {products.length}
               </span>
             </button>
 
-            {/* Notifikasi Panen Button */}
-            <button
-              onClick={() => {
-                setActiveSubScreen('none');
-                setSelectedTab('notif');
-              }}
-              className={`relative p-2 text-stone-700 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer ${
-                selectedTab === 'notif' && activeSubScreen === 'none' ? 'bg-stone-100 text-emerald-800' : ''
-              }`}
-              title="Notifikasi & Peringatan Panen"
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-600 rounded-full animate-ping" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-rose-600 rounded-full" />
-            </button>
+            {/* Notifikasi Panen Button (Hanya tampil jika sudah login) */}
+            {isAuthenticated && (
+              <button
+                onClick={() => {
+                  setActiveSubScreen('none');
+                  setSelectedTab('notif');
+                }}
+                className={`relative p-2 text-stone-700 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer ${
+                  selectedTab === 'notif' && activeSubScreen === 'none' ? 'bg-stone-100 text-emerald-800' : ''
+                }`}
+                title="Notifikasi & Peringatan Panen"
+              >
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-rose-600 rounded-full animate-ping" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-rose-600 rounded-full" />
+              </button>
+            )}
 
-            {/* Keranjang Belanja Button */}
-            <button
-              onClick={() => setActiveSubScreen('cart')}
-              className={`relative flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold border transition-all cursor-pointer ${
-                activeSubScreen === 'cart'
-                  ? 'bg-emerald-800 text-white border-emerald-800'
-                  : 'bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-300'
-              }`}
-              title="Keranjang Belanja"
-            >
-              <ShoppingCart className="w-4 h-4 text-emerald-800" />
-              <span className="hidden sm:inline">Keranjang</span>
-              {totalCartCount > 0 && (
-                <span className="bg-rose-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2">
-                  {totalCartCount}
-                </span>
-              )}
-            </button>
+            {/* Keranjang Belanja Button (Hanya tampil jika sudah login) */}
+            {isAuthenticated && (
+              <button
+                onClick={() => setActiveSubScreen('cart')}
+                className={`relative flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-bold border transition-all cursor-pointer ${
+                  activeSubScreen === 'cart'
+                    ? 'bg-emerald-800 text-white border-emerald-800'
+                    : 'bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-300'
+                }`}
+                title="Keranjang Belanja"
+              >
+                <ShoppingCart className="w-4 h-4 text-emerald-800" />
+                <span className="hidden sm:inline">Keranjang</span>
+                {totalCartCount > 0 && (
+                  <span className="bg-rose-600 text-white text-[10px] font-mono font-bold px-1.5 py-0.2">
+                    {totalCartCount}
+                  </span>
+                )}
+              </button>
+            )}
 
-            {/* Akun / Profile Button */}
-            <button
-              onClick={() => {
-                setActiveSubScreen('none');
-                setSelectedTab('akun');
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold border transition-all cursor-pointer ${
-                selectedTab === 'akun' && activeSubScreen === 'none'
-                  ? 'bg-emerald-800 text-white border-emerald-800'
-                  : 'bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-300'
-              }`}
-              title="Akun & Profil"
-            >
-              <User className="w-4 h-4 text-stone-600" />
-              <span className="hidden lg:inline">{user?.name ? user.name.split(' ')[0] : 'Akun Saya'}</span>
-            </button>
+            {/* Akun / Profile / Login Button */}
+            {!isAuthenticated ? (
+              <button
+                type="button"
+                onClick={onOpenLogin}
+                className="bg-emerald-800 hover:bg-emerald-900 text-white px-3 py-2 text-xs font-bold border border-emerald-950 transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                title="Masuk ke Akun Terniva"
+              >
+                <User className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Masuk</span>
+              </button>
+            ) : (
+              /* Akun Saya (Disembunyikan pada Mode Mobile, Tampil di Desktop) */
+              <button
+                onClick={handleOpenAccount}
+                className={`hidden md:flex items-center gap-1.5 px-2.5 py-2 text-xs font-semibold border transition-all cursor-pointer ${
+                  selectedTab === 'akun' && activeSubScreen === 'none'
+                    ? 'bg-emerald-800 text-white border-emerald-800'
+                    : 'bg-stone-50 hover:bg-stone-100 text-stone-800 border-stone-300'
+                }`}
+                title="Akun & Profil"
+              >
+                <User className="w-4 h-4 text-stone-600" />
+                <span>{user?.name ? user.name.split(' ')[0] : 'Akun Saya'}</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -804,22 +871,24 @@ export default function MobileShell({
               <span>Live Panen & Video Lelang</span>
             </button>
 
-            {/* Notifikasi & Peringatan Panen */}
-            <button
-              onClick={() => {
-                setActiveSubScreen('none');
-                setSelectedTab('notif');
-              }}
-              className={`px-3.5 py-2.5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
-                selectedTab === 'notif' && activeSubScreen === 'none'
-                  ? 'border-amber-400 text-amber-300 bg-emerald-950/60'
-                  : 'border-transparent text-emerald-100 hover:text-white hover:bg-emerald-800/50'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5 text-amber-300" />
-              <span>Peringatan Panen</span>
-              <span className="w-2 h-2 bg-rose-500 rounded-full" />
-            </button>
+            {/* Notifikasi & Peringatan Panen (Tampil jika sudah login) */}
+            {isAuthenticated && (
+              <button
+                onClick={() => {
+                  setActiveSubScreen('none');
+                  setSelectedTab('notif');
+                }}
+                className={`px-3.5 py-2.5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                  selectedTab === 'notif' && activeSubScreen === 'none'
+                    ? 'border-amber-400 text-amber-300 bg-emerald-950/60'
+                    : 'border-transparent text-emerald-100 hover:text-white hover:bg-emerald-800/50'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5 text-amber-300" />
+                <span>Peringatan Panen</span>
+                <span className="w-2 h-2 bg-rose-500 rounded-full" />
+              </button>
+            )}
 
             {/* Konsultasi Dokter Hewan & Tanaman */}
             <button
@@ -845,6 +914,19 @@ export default function MobileShell({
             >
               <Handshake className="w-3.5 h-3.5 text-amber-300" />
               <span>Kemitraan Petani/Ternak</span>
+            </button>
+
+            {/* Toko Saya (Pusat Penjual Desktop) */}
+            <button
+              onClick={handleOpenSellerCenter}
+              className={`px-3.5 py-2.5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 ${
+                activeSubScreen === 'seller_center'
+                  ? 'border-amber-400 text-amber-300 bg-emerald-950/60'
+                  : 'border-transparent text-emerald-100 hover:text-white hover:bg-emerald-800/50'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5 text-emerald-300" />
+              <span>Toko Saya</span>
             </button>
           </div>
 
@@ -900,6 +982,7 @@ export default function MobileShell({
               setActiveSubScreen('none');
             }}
             unreadCount={2}
+            isAuthenticated={isAuthenticated}
           />
         </div>
       )}
@@ -974,7 +1057,7 @@ export default function MobileShell({
                 </li>
                 <li>
                   <button
-                    onClick={() => setActiveSubScreen('seller_center')}
+                    onClick={handleOpenSellerCenter}
                     className="hover:text-emerald-400 transition-colors cursor-pointer"
                   >
                     Pusat Penjual & Restok Komoditas

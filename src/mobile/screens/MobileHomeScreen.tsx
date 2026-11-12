@@ -18,6 +18,7 @@ import {
   Sparkles,
   Leaf,
   Layers,
+  ChevronRight,
 } from 'lucide-react';
 import { MOBILE_PRODUCTS } from '../mobileData';
 import { MobileProduct } from '../types';
@@ -65,6 +66,9 @@ export default function MobileHomeScreen({
       (p.etalase && p.etalase.toLowerCase().includes(searchFilter.toLowerCase()));
     return matchCategory && matchSearch;
   });
+
+  // Beranda dibatasi tampil hanya 20 data sesuai instruksi
+  const displayedProducts = filteredProducts.slice(0, 20);
 
   const getItemBadge = (index: number) => {
     switch (index % 4) {
@@ -328,21 +332,26 @@ export default function MobileHomeScreen({
       <div className="px-2.5 sm:px-0 pt-2">
         <div className="px-1 py-2 flex items-center justify-between">
           <div>
-            <h4 className="text-xs sm:text-sm font-bold text-stone-900 uppercase tracking-wide">
-              Rekomendasi Produk & Pasokan
-            </h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs sm:text-sm font-bold text-stone-900 uppercase tracking-wide">
+                Rekomendasi Produk & Pasokan
+              </h4>
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.2">
+                20 Pilihan Teratas
+              </span>
+            </div>
             <span className="text-[10px] sm:text-xs text-stone-500">
-              Katalog kurasi mitra binaan & komoditas panen
+              Katalog kurasi mitra binaan (Menampilkan {displayedProducts.length} dari {filteredProducts.length} komoditas)
             </span>
           </div>
           <span className="text-xs text-stone-500 font-mono">
-            {filteredProducts.length} Komoditas
+            {displayedProducts.length} / {filteredProducts.length} Komoditas
           </span>
         </div>
 
-        {/* Responsive Desktop Multi-Column Grid */}
+        {/* Responsive Desktop Multi-Column Grid (Dibatasi 20 Data) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 mt-2">
-          {filteredProducts.map((product, idx) => {
+          {displayedProducts.map((product, idx) => {
             const badge = getItemBadge(idx);
             return (
               <div
@@ -429,6 +438,27 @@ export default function MobileHomeScreen({
               </div>
             );
           })}
+        </div>
+
+        {/* Tombol Akses Seluruh Katalog Pasokan */}
+        <div className="mt-6 p-4 bg-white border border-stone-200 text-center space-y-2 shadow-2xs">
+          <div className="text-xs text-stone-600">
+            Beranda menampilkan <strong>{displayedProducts.length}</strong> dari <strong>{filteredProducts.length}</strong> total komoditas panen.
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenSearchListing) {
+                onOpenSearchListing();
+              } else {
+                onNavigateToScreen('search_listing');
+              }
+            }}
+            className="inline-flex items-center gap-1.5 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold px-4 py-2 shadow-xs transition-colors cursor-pointer"
+          >
+            <span>Buka Seluruh Katalog Pasokan ({filteredProducts.length} Komoditas)</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>

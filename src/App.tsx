@@ -2,7 +2,7 @@ import { useState } from 'react';
 import MobileShell from './mobile/MobileShell';
 import { MobileSplashScreen } from './mobile/screens/MobileSplashScreen';
 import { MobileAuthScreen } from './mobile/screens/MobileAuthScreen';
-import { Sprout } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(false);
@@ -22,15 +22,41 @@ export default function App() {
     }
   });
 
+  // State untuk modal login kontekstual
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authReason, setAuthReason] = useState<string | undefined>(undefined);
+  const [pendingCallback, setPendingCallback] = useState<(() => void) | null>(null);
+
   const handleAuthSuccess = (userData: { name: string; email: string; phone: string }) => {
     setUser(userData);
     setIsAuthenticated(true);
+    setShowAuthModal(false);
+    setAuthReason(undefined);
     try {
       localStorage.setItem('terniva_logged_in', 'true');
       localStorage.setItem('terniva_user_profile', JSON.stringify(userData));
     } catch {
       // ignore
     }
+    if (pendingCallback) {
+      const cb = pendingCallback;
+      setPendingCallback(null);
+      cb();
+    }
+  };
+
+  const handleRequireAuth = (reason?: string, onDone?: () => void) => {
+    setAuthReason(reason);
+    if (onDone) {
+      setPendingCallback(() => onDone);
+    } else {
+      setPendingCallback(null);
+    }
+    setShowAuthModal(true);
+  };
+
+  const handleOpenLogin = () => {
+    handleRequireAuth('Silakan masuk ke akun Terniva Anda untuk pengalaman penuh.');
   };
 
   const handleLogout = () => {
@@ -43,7 +69,7 @@ export default function App() {
     }
   };
 
-  // 1. Splash Screen Mode (Responsive)
+  // 1. Splash Screen Mode (opsional jika diminta)
   if (showSplash) {
     return (
       <div className="min-h-screen bg-stone-900 flex flex-col items-center justify-center p-4">
@@ -54,93 +80,74 @@ export default function App() {
     );
   }
 
-  // 2. Authentication Screen (Responsive Desktop Split View)
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-stone-100 flex flex-col justify-between font-sans">
-        {/* Top Desktop Bar */}
-        <header className="bg-emerald-900 text-white border-b border-emerald-950 py-3 px-4 sm:px-8 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-white flex items-center justify-center text-emerald-800">
-              <Sprout className="w-5 h-5 text-emerald-800" />
-            </div>
-            <div>
-              <span className="text-lg font-bold tracking-tight text-white">Terniva</span>
-              <span className="text-xs text-emerald-300 ml-2 font-mono hidden sm:inline">
-                Smart Agritech Marketplace
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsAuthenticated(true)}
-            className="text-xs font-bold text-emerald-200 hover:text-white underline cursor-pointer"
-          >
-            Masuk Sebagai Tamu (Guest) →
-          </button>
-        </header>
+  // 2. Default: Halaman utama langsung tampil (Home/Beranda) tanpa halaman login di awal!
+  return (
+    <>
+      <MobileShell
+        onLogout={handleLogout}
+        onReplaySplash={() => setShowSplash(true)}
+        user={user}
+        isAuthenticated={isAuthenticated}
+        onOpenLogin={handleOpenLogin}
+        onRequireAuth={handleRequireAuth}
+      />
 
-        {/* Desktop Split Auth Content */}
-        <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-8 flex items-center justify-center">
-          <div className="w-full grid grid-cols-1 lg:grid-cols-12 bg-white border border-stone-300 shadow-xl overflow-hidden">
-            {/* Left Hero Banner (Desktop) */}
-            <div className="hidden lg:flex lg:col-span-5 bg-emerald-950 text-white p-8 flex-col justify-between relative overflow-hidden">
-              <img
-                src="/src/assets/images/terniva_hero_landscape_1794449096818.jpg"
-                alt="Terniva Agritech"
-                className="absolute inset-0 w-full h-full object-cover opacity-30"
-              />
-              <div className="relative z-10 space-y-3">
-                <span className="bg-emerald-800 text-emerald-200 text-xs font-mono font-bold px-2 py-0.5">
-                  Platform Agribisnis Terintegrasi
-                </span>
-                <h2 className="text-2xl font-bold leading-tight">
-                  Jual Beli Komoditas, Kemitraan & Pantau Panen IoT Indonesia
-                </h2>
-                <p className="text-xs text-stone-300 leading-relaxed">
-                  Menghubungkan kelompok tani & peternak langsung dengan jaringan hotel, restoran,
-                  pasar induk, dan buyer ekspor dunia.
-                </p>
-              </div>
-
-              <div className="relative z-10 pt-6 border-t border-white/20 text-xs space-y-2 text-emerald-200">
-                <div className="flex items-center gap-1.5">
-                  <span>✓</span>
-                  <span>Pasar Domestik (Hotel, Resto, Pasar, UMKM) & Ekspor</span>
+      {/* Modal Login Interaktif: Muncul HANYA saat klik login, akan transaksi beli barang, atau akses data sensitif */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="relative w-full max-w-4xl bg-white shadow-2xl border border-stone-300 overflow-hidden my-auto animate-in fade-in duration-200">
+            {/* Header Modal Login */}
+            <div className="bg-emerald-950 text-white px-4 py-3 flex items-center justify-between border-b border-emerald-900">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-emerald-800 text-emerald-200 flex items-center justify-center text-xs font-bold font-mono">
+                  T
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span>✓</span>
-                  <span>Titip Tani & Ternak dengan CCTV IoT 24/7</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span>✓</span>
-                  <span>Konsultasi Dokter Hewan & Tanaman Bersertifikat</span>
+                <div>
+                  <span className="text-sm font-bold tracking-tight">Masuk ke Akun Terniva</span>
+                  <span className="text-[10px] text-emerald-300 ml-2 hidden sm:inline">
+                    Smart Agritech & Escrow Platform
+                  </span>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAuthModal(false);
+                  setPendingCallback(null);
+                  setAuthReason(undefined);
+                }}
+                className="text-stone-300 hover:text-white p-1 transition-colors cursor-pointer"
+                title="Tutup / Lanjut Jelajah Sebagai Tamu"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Right Auth Form */}
-            <div className="lg:col-span-7 p-4 sm:p-8">
+            {/* Banner Alasan Login jika dipicu oleh transaksi atau data */}
+            {authReason && (
+              <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 text-xs text-amber-900 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold">Autentikasi Diperlukan:</strong>
+                  <span>{authReason}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Form Login / Register */}
+            <div className="p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
               <MobileAuthScreen
                 onAuthSuccess={handleAuthSuccess}
-                onSkipGuest={() => setIsAuthenticated(true)}
+                onSkipGuest={() => {
+                  setShowAuthModal(false);
+                  setPendingCallback(null);
+                  setAuthReason(undefined);
+                }}
               />
             </div>
           </div>
-        </main>
-
-        {/* Footer */}
-        <footer className="py-4 text-center text-xs text-stone-500 border-t border-stone-200 bg-white">
-          © 2026 PT Terniva Agroteknologi Nusantara. Seluruh Hak Cipta Dilindungi.
-        </footer>
-      </div>
-    );
-  }
-
-  // 3. Authenticated: Full Responsive Desktop App
-  return (
-    <MobileShell
-      onLogout={handleLogout}
-      user={user}
-    />
+        </div>
+      )}
+    </>
   );
 }
